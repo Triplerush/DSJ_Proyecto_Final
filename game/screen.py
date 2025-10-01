@@ -3,7 +3,7 @@ from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.properties import NumericProperty, StringProperty
 from kivy.app import App
-import math
+import math, random
 
 from .player import Player
 from .enemy import Enemy
@@ -20,6 +20,7 @@ class GameScreen(Widget):
 
         self.enemies = []
 
+        # Label de puntuación
         self.label = Label(text=self.score_text,
                            font_size='24sp',
                            color=(1, 1, 1, 1),
@@ -33,20 +34,34 @@ class GameScreen(Widget):
         Clock.schedule_interval(self.add_score, 1)
 
     def spawn_enemy(self, dt):
-        enemy = Enemy(self.player)
+        # Contar cuántos homing existen
+        homing_count = sum(1 for e in self.enemies if e.is_homing)
+
+        # 30% chance de homing pero máximo 5
+        is_homing = False
+        if homing_count < 5 and random.random() < 0.3:
+            is_homing = True
+
+        enemy = Enemy(self.player, is_homing=is_homing)
+
+        # Evitar superposición con otros enemigos
+        while any(self.check_enemy_overlap(enemy, other) for other in self.enemies):
+            enemy.center_x = random.randint(50, self.width - 50)
+
         self.enemies.append(enemy)
         self.add_widget(enemy)
 
     def update(self, dt):
         for enemy in self.enemies[:]:
-            enemy.update(dt)
+            alive = enemy.update(dt)
 
-            if not enemy.is_homing and enemy.y < -50:
+            if not alive:
                 self.remove_widget(enemy)
                 self.enemies.remove(enemy)
+                continue
 
             if self.check_collision(self.player, enemy):
-                print("❌ ¡Perdiste!")
+                print("¡Perdiste!")
                 App.get_running_app().stop()
 
         self.label.text = self.score_text
@@ -64,6 +79,13 @@ class GameScreen(Widget):
 
         distancia = math.sqrt((px - ex)**2 + (py - ey)**2)
         return distancia < (pr + er)
+
+    def check_enemy_overlap(self, e1, e2):
+        ex1, ey1 = e1.center_x, e1.center_y
+        ex2, ey2 = e2.center_x, e2.center_y
+        r = e1.sprite.width / 2
+        distancia = math.sqrt((ex1 - ex2)**2 + (ey1 - ey2)**2)
+        return distancia < r * 1.5
 
     def on_touch_down(self, touch):
         self.player.move_to(touch)
