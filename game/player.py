@@ -11,8 +11,23 @@ class Player(Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.sprite = Image(source="assets/images/player.png", size_hint=(None, None))
-        self.sprite.size = (80, 80)
+
+        # --- Animación del jugador ---
+        # Lista de imágenes para la animación. Asegúrate que estén en esta ruta.
+        self.animation_frames = [
+            "images/ave1.png",
+            "images/ave2.png",
+            "images/ave3.png",
+            "images/ave4.png"
+        ]
+        self.current_frame = 0
+        self.animation_speed = 0.1  # Cambia de imagen cada 0.1 segundos (10 FPS)
+
+        # Inicializar el sprite con la primera imagen de la animación
+        self.sprite = Image(source=self.animation_frames[self.current_frame], size_hint=(None, None))
+        # ----------------------------------------------
+
+        self.sprite.size = (160, 160)
         self.add_widget(self.sprite)
 
         self.center_x = Window.width / 2
@@ -22,6 +37,16 @@ class Player(Widget):
         self.update_sprite()
 
         Clock.schedule_interval(self.update, 1 / 60)
+
+        # --- Iniciar el ciclo de animación ---
+        Clock.schedule_interval(self.animate_player, self.animation_speed)
+        # ----------------------------------------------------
+
+    def animate_player(self, dt):
+        """Cambia el sprite del jugador para crear una animación de aleteo."""
+        # Avanza al siguiente frame y vuelve al inicio si llega al final (loop)
+        self.current_frame = (self.current_frame + 1) % len(self.animation_frames)
+        self.sprite.source = self.animation_frames[self.current_frame]
 
     def update_sprite(self):
         self.sprite.center_x = self.center_x
