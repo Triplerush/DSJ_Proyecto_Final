@@ -3,6 +3,8 @@ from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.properties import NumericProperty, StringProperty
 from kivy.app import App
+from kivy.graphics import Rectangle
+from kivy.core.window import Window
 import math, random
 
 from .player import Player
@@ -15,6 +17,30 @@ class GameScreen(Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        # --- Lógica de fondo con scrolling ---
+        # Dimensiones originales de tu imagen de fondo
+        IMG_WIDTH = 2304
+        IMG_HEIGHT = 1024
+        SCROLL_DURATION = 60  # segundos para el recorrido completo
+
+        # Calcular el tamaño del fondo manteniendo la proporción
+        aspect_ratio = IMG_WIDTH / IMG_HEIGHT
+        self.scaled_bg_height = Window.height
+        self.scaled_bg_width = self.scaled_bg_height * aspect_ratio
+
+        # Calcular la distancia y velocidad del scroll
+        scroll_distance = self.scaled_bg_width - Window.width
+        self.scroll_speed = scroll_distance / SCROLL_DURATION
+
+        with self.canvas.before:
+            self.bg = Rectangle(
+                source="images/fondo1.png",
+                size=(self.scaled_bg_width, self.scaled_bg_height),
+                pos=(0, 0)
+            )
+        # --------------------------------------------------------
+
         self.player = Player()
         self.add_widget(self.player)
 
@@ -52,6 +78,18 @@ class GameScreen(Widget):
         self.add_widget(enemy)
 
     def update(self, dt):
+        # --- Mover el fondo ---
+        # Calculamos el límite izquierdo para detener el scroll
+        left_limit = -(self.scaled_bg_width - Window.width)
+        
+        # Nueva posición x
+        new_x = self.bg.pos[0] - self.scroll_speed * dt
+        
+        # Nos aseguramos de no pasar del límite
+        if new_x > left_limit:
+            self.bg.pos = (new_x, 0)
+        # ------------------------------------
+        
         for enemy in self.enemies[:]:
             alive = enemy.update(dt)
 
