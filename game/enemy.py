@@ -1,14 +1,29 @@
 from kivy.uix.widget import Widget
 from kivy.uix.image import Image
 from kivy.core.window import Window
+from kivy.clock import Clock  
 import random, math
 
 
 class Enemy(Widget):
     def __init__(self, player, is_homing=False, **kwargs):
         super().__init__(**kwargs)
-        self.sprite = Image(source="assets/images/enemy.png", size_hint=(None, None))
-        self.sprite.size = (60, 60)
+
+        # --- Animación del enemigo ---
+        self.animation_frames = [
+            "images/enemigo1.png",
+            "images/enemigo2.png",
+            "images/enemigo3.png",
+            "images/enemigo4.png"
+        ]
+        self.current_frame = 0
+        self.animation_speed = 0.1  # 10 FPS
+
+        # Inicializar sprite con el primer frame
+        self.sprite = Image(source=self.animation_frames[self.current_frame], size_hint=(None, None))
+        # -------------------------------------------
+
+        self.sprite.size = (120, 120)
         self.add_widget(self.sprite)
 
         # Posición inicial
@@ -22,7 +37,16 @@ class Enemy(Widget):
         self.player = player
 
         # Vida en segundos solo para homing
-        self.lifetime = 5 if self.is_homing else None  
+        self.lifetime = 5 if self.is_homing else None
+
+        # --- MODIFICACIÓN: Iniciar animación ---
+        Clock.schedule_interval(self.animate_enemy, self.animation_speed)
+        # ---------------------------------------
+
+    def animate_enemy(self, dt):
+        """Cambia el sprite del enemigo para crear una animación."""
+        self.current_frame = (self.current_frame + 1) % len(self.animation_frames)
+        self.sprite.source = self.animation_frames[self.current_frame]
 
     def update_sprite(self):
         self.sprite.center_x = self.center_x
