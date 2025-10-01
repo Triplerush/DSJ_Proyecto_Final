@@ -1,0 +1,14 @@
+<Cuadrado>:
+    size: 100, 100
+    canvas:
+        Color:
+            rgba: 1, 0, 0, 1  # Rojo
+        Rectangle:
+            pos: self.pos_x, self.pos_y
+            size: self.size
+
+<MiJuego>:
+    Cuadrado:
+        id: cuadrado
+        pos_x: root.center_x - self.width / 2
+        pos_y: root.center_y - self.height / 2
