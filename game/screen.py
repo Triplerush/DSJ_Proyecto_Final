@@ -11,7 +11,7 @@ from game.player import Player
 from game.enemy import Enemy
 from game.projectile import Projectile
 from game.overlays import PauseMenu, GameOverMenu, PauseButton
-
+from game.utils import apply_flocking
 
 class GameScreen(Widget):
     score = NumericProperty(0)
@@ -23,6 +23,12 @@ class GameScreen(Widget):
         # Estado del juego
         self.is_paused = False
         self.game_over = False
+
+        # NUEVO: Configuración de flocking
+        self.flocking_enabled = True  # Activar/desactivar flocking
+        self.flocking_probability = 0.6  # 50% de probabilidad de crear enemigo con flocking
+        self.flocking_group_size = 5  # Enemigos por grupo
+        self.flocking_spawn_radius = 150  # Radio de aparición del grupo
 
         # --- Lógica de fondo con scrolling ---
         IMG_WIDTH = 2304
@@ -64,7 +70,7 @@ class GameScreen(Widget):
         self.add_widget(self.pause_button)
 
         # Eventos programados
-        self.spawn_event = Clock.schedule_interval(self.spawn_enemy, 2)
+        self.spawn_event = Clock.schedule_interval(self.spawn_enemy, 3)
         self.update_event = Clock.schedule_interval(self.update, 1 / 60)
         self.score_event = Clock.schedule_interval(self.add_score, 1)
 
@@ -144,22 +150,39 @@ class GameScreen(Widget):
         app.show_main_menu()
 
     def spawn_enemy(self, dt):
+        """Crea un nuevo enemigo con posibilidad de flocking, homing o normal"""
         if self.is_paused or self.game_over:
             return
 
         homing_count = sum(1 for e in self.enemies if e.is_homing)
 
-        is_homing = False
-        if homing_count < 5 and random.random() < 0.3:
-            is_homing = True
-
-        enemy = Enemy(self.player, is_homing=is_homing)
+    
+        if homing_count < 5 and random.random() < 0.2:
+            self.spawn_single_enemy(is_homing=True)
+            print("🎯 Spawned HOMING enemy")
+        elif self.flocking_enabled and random.random() < self.flocking_probability:
+            # Spawn GRUPO FLOCKING (60% de probabilidad)
+            group_size = random.randint(3, self.flocking_group_size)
+            self.spawn_flocking_group(group_size)
+            print(f"🐦🐦🐦 Spawned FLOCKING GROUP of {group_size} enemies")
+        else:
+            self.spawn_single_enemy(is_homing=False, use_flocking=False)
+            print("⬇️ Spawned NORMAL enemy")
+        
+    def spawn_single_enemy(self, is_homing=False, use_flocking=False):
+        """Crea un solo enemigo"""
+        enemy = Enemy(
+            self.player, 
+            is_homing=is_homing,
+            use_flocking=use_flocking
+        )
         
         def shoot_for_this_enemy():
             self.create_projectile(enemy)
         
         enemy.shoot_projectile = shoot_for_this_enemy
 
+        # Evitar solapamiento
         max_attempts = 10
         attempts = 0
         while attempts < max_attempts and any(self.check_enemy_overlap(enemy, other) for other in self.enemies):
@@ -168,6 +191,46 @@ class GameScreen(Widget):
 
         self.enemies.append(enemy)
         self.add_widget(enemy)
+
+    def spawn_flocking_group(self, group_size):
+        """Crea un grupo de enemigos con flocking cercanos entre sí"""
+        # Posición central del grupo
+        center_x = random.randint(150, Window.width - 150)
+        center_y = Window.height + 100
+        
+        for i in range(group_size):
+            # Posición aleatoria alrededor del centro
+            angle = random.uniform(0, 2 * math.pi)
+            radius = random.uniform(35, self.flocking_spawn_radius)
+            
+            offset_x = radius * math.cos(angle)
+            offset_y = radius * math.sin(angle)
+            
+            enemy = Enemy(
+                self.player, 
+                is_homing=False,
+                use_flocking=True
+            )
+            
+            # Posicionar en el grupo
+            enemy.center_x = center_x + offset_x
+            enemy.center_y = center_y + offset_y
+            enemy.update_sprite()
+            
+            # Dar velocidades iniciales similares (hacia abajo con ligera variación)
+            enemy.velocity_x = random.uniform(-1.5, 1.5)
+            enemy.velocity_y = random.uniform(-5.0, -3.0)
+            
+            # Asignar función de disparo
+            def shoot_for_this_enemy(e=enemy):
+                self.create_projectile(e)
+            
+            enemy.shoot_projectile = shoot_for_this_enemy
+            
+            self.enemies.append(enemy)
+            self.add_widget(enemy)
+            
+            print(f"   ✨ Flocking member {i+1} at ({enemy.center_x:.0f}, {enemy.center_y:.0f})")
 
     def create_projectile(self, enemy):
         if enemy not in self.enemies:
@@ -183,6 +246,7 @@ class GameScreen(Widget):
         self.add_widget(projectile)
 
     def update(self, dt):
+        """Actualiza todos los elementos del juego"""
         if self.is_paused or self.game_over:
             return
 
@@ -192,10 +256,44 @@ class GameScreen(Widget):
         
         if new_x > left_limit:
             self.bg.pos = (new_x, 0)
+
+        # NUEVO: Obtener lista de enemigos con flocking para cálculos
+        flocking_enemies = [e for e in self.enemies if e.use_flocking]
+        # LOG: Mostrar cantidad de enemigos con flocking cada 60 frames
+        if hasattr(self, 'frame_count'):
+            self.frame_count += 1
+        else:
+            self.frame_count = 0
         
+        if self.frame_count % 60 == 0:
+            total = len(self.enemies)
+            flocking = len(flocking_enemies)
+            homing = sum(1 for e in self.enemies if e.is_homing)
+            normal = total - flocking - homing
+            print(f"📊 Enemigos: Total={total} | Flocking={flocking} | Homing={homing} | Normal={normal}")
+        
+        
+        
+        
+        # Actualizar jugador
+        self.player.update(dt)
         # Actualizar enemigos
         for enemy in self.enemies[:]:
-            alive = enemy.update(dt)
+            # NUEVO: Calcular fuerza de flocking si aplica
+            flocking_force = None
+            if enemy.use_flocking:
+                flocking_force = apply_flocking(
+                    enemy, 
+                    flocking_enemies,
+                    separation_weight=3.0,  # Más peso a separación
+                    alignment_weight=1.2,   # Peso medio a alineación
+                    cohesion_weight=0.8     # Peso medio a cohesión
+                )
+                # LOG: Mostrar fuerza de flocking cada 60 frames
+                if self.frame_count % 60 == 0 and flocking_force:
+                    fx, fy = flocking_force
+                    print(f"   🔷 Flocking force: ({fx:.2f}, {fy:.2f})")
+            alive = enemy.update(dt, flocking_force=flocking_force)
 
             if not alive:
                 self.remove_widget(enemy)
@@ -224,12 +322,14 @@ class GameScreen(Widget):
         self.label.text = self.score_text
 
     def add_score(self, dt):
+        """Incrementa la puntuación cada segundo"""
         if self.is_paused or self.game_over:
             return
         self.score += 1
         self.score_text = f"Score: {self.score}"
 
     def check_collision(self, player, enemy):
+        """Detecta colisión entre jugador y enemigo"""
         px, py = player.center_x, player.center_y
         ex, ey = enemy.center_x, enemy.center_y
 
@@ -240,6 +340,7 @@ class GameScreen(Widget):
         return distancia < (pr + er)
 
     def check_projectile_collision(self, player, projectile):
+        """Detecta colisión entre jugador y proyectil"""
         px, py = player.center_x, player.center_y
         proj_x, proj_y = projectile.center_x, projectile.center_y
 
@@ -250,6 +351,7 @@ class GameScreen(Widget):
         return distancia < (pr + proj_r)
 
     def check_enemy_overlap(self, e1, e2):
+        """Detecta solapamiento entre dos enemigos al spawnear"""
         ex1, ey1 = e1.center_x, e1.center_y
         ex2, ey2 = e2.center_x, e2.center_y
         r = e1.sprite.width / 2
@@ -257,6 +359,7 @@ class GameScreen(Widget):
         return distancia < r * 1.5
 
     def on_touch_down(self, touch):
+        """Maneja el toque inicial en pantalla"""
         if self.is_paused or self.game_over:
             return super().on_touch_down(touch)
         
@@ -268,6 +371,7 @@ class GameScreen(Widget):
         return super().on_touch_down(touch)
 
     def on_touch_move(self, touch):
+        """Maneja el movimiento del toque en pantalla"""
         if self.is_paused or self.game_over:
             return super().on_touch_move(touch)
         

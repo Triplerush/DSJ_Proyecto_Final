@@ -3,10 +3,10 @@ from kivy.uix.image import Image
 from kivy.core.window import Window
 from kivy.clock import Clock  
 import random, math
-
+from game.utils import limit_vector, normalize_vector
 
 class Enemy(Widget):
-    def __init__(self, player, is_homing=False, **kwargs):
+    def __init__(self, player, is_homing=False, use_flocking=False, **kwargs):
         super().__init__(**kwargs)
 
         # Referencias a imágenes de animación
@@ -37,6 +37,16 @@ class Enemy(Widget):
         self.is_homing = is_homing
         self.player = player
 
+        #  Propiedades para flocking
+        self.use_flocking = use_flocking
+        self.velocity_x = 0
+        self.velocity_y = -self.speed  # Inicialmente hacia abajo
+        self.acceleration_x = 0
+        self.acceleration_y = 0
+        self.max_speed = 6
+        self.max_force = 0.3
+
+
         # Vida en segundos solo para homing
         self.lifetime = 5 if self.is_homing else None
 
@@ -58,7 +68,12 @@ class Enemy(Widget):
         self.sprite.center_x = self.center_x
         self.sprite.center_y = self.center_y
 
-    def update(self, dt):
+    def apply_force(self, force_x, force_y):
+        """Aplica una fuerza a la aceleración (usado para flocking)"""
+        self.acceleration_x += force_x
+        self.acceleration_y += force_y
+    
+    def update(self, dt, flocking_force=None):
         """Actualiza el estado del enemigo cada frame"""
         # Actualizar temporizador de disparo
         self.time_since_last_shot += dt
@@ -72,8 +87,44 @@ class Enemy(Widget):
                 self.shoot_projectile()
             self.time_since_last_shot = 0
         
-        # Lógica de movimiento
-        if self.is_homing:
+        if self.use_flocking and flocking_force:
+            # Aplicar fuerza de flocking
+            force_x, force_y = flocking_force
+            # LOG: Debug ocasional
+            if not hasattr(self, 'log_counter'):
+                self.log_counter = 0
+            self.log_counter += 1
+            if self.log_counter % 120 == 0:
+                print(f"   🐦 Flocking enemy at ({self.center_x:.0f}, {self.center_y:.0f}) | Force: ({force_x:.2f}, {force_y:.2f}) | Vel: ({self.velocity_x:.2f}, {self.velocity_y:.2f})")
+
+            # Limitar la fuerza máxima
+            force_x, force_y = limit_vector(force_x, force_y, self.max_force)
+            self.apply_force(force_x, force_y)
+            
+            # Actualizar velocidad con aceleración
+            self.velocity_x += self.acceleration_x
+            self.velocity_y += self.acceleration_y
+            
+            # Limitar velocidad máxima
+            self.velocity_x, self.velocity_y = limit_vector(
+                self.velocity_x, self.velocity_y, self.max_speed
+            )
+            
+            # Actualizar posición
+            self.center_x += self.velocity_x
+            self.center_y += self.velocity_y
+            
+            # Resetear aceleración para el próximo frame
+            self.acceleration_x = 0
+            self.acceleration_y = 0
+            
+            # Verificar si sale de pantalla
+            if self.y < -200 or self.center_x < -100 or self.center_x > Window.width + 100:
+                print(f"   ❌ Flocking enemy removed (out of bounds)")
+                return False
+        
+        # 2. Si es HOMING (persigue al jugador)
+        elif self.is_homing:
             # Seguir al jugador
             dx = self.player.center_x - self.center_x
             dy = self.player.center_y - self.center_y
@@ -94,4 +145,4 @@ class Enemy(Widget):
 
         self.update_sprite()
         return True
-    
+
