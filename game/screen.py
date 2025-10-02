@@ -7,9 +7,10 @@ from kivy.graphics import Rectangle
 from kivy.core.window import Window
 import math, random
 
-from .player import Player
-from .enemy import Enemy
-from .projectile import Projectile
+from game.player import Player
+from game.enemy import Enemy
+from game.projectile import Projectile
+from game.overlays import PauseMenu, GameOverMenu, PauseButton
 
 
 class GameScreen(Widget):
@@ -19,18 +20,19 @@ class GameScreen(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        # Estado del juego
+        self.is_paused = False
+        self.game_over = False
+
         # --- Lógica de fondo con scrolling ---
-        # Dimensiones originales de tu imagen de fondo
         IMG_WIDTH = 2304
         IMG_HEIGHT = 1024
-        SCROLL_DURATION = 60  # segundos para el recorrido completo
+        SCROLL_DURATION = 60
 
-        # Calcular el tamaño del fondo manteniendo la proporción
         aspect_ratio = IMG_WIDTH / IMG_HEIGHT
         self.scaled_bg_height = Window.height
         self.scaled_bg_width = self.scaled_bg_height * aspect_ratio
 
-        # Calcular la distancia y velocidad del scroll
         scroll_distance = self.scaled_bg_width - Window.width
         self.scroll_speed = scroll_distance / SCROLL_DURATION
 
@@ -40,13 +42,12 @@ class GameScreen(Widget):
                 size=(self.scaled_bg_width, self.scaled_bg_height),
                 pos=(0, 0)
             )
-        # --------------------------------------------------------
 
         self.player = Player()
         self.add_widget(self.player)
 
         self.enemies = []
-        self.projectiles = []  # Lista de proyectiles
+        self.projectiles = []
 
         # Label de puntuación
         self.label = Label(text=self.score_text,
@@ -57,28 +58,108 @@ class GameScreen(Widget):
                            halign="left", valign="top")
         self.add_widget(self.label)
 
-        Clock.schedule_interval(self.spawn_enemy, 2)
-        Clock.schedule_interval(self.update, 1 / 60)
-        Clock.schedule_interval(self.add_score, 1)
+        # Botón de pausa
+        self.pause_button = PauseButton()
+        self.pause_button.bind(on_press=lambda x: self.toggle_pause())
+        self.add_widget(self.pause_button)
+
+        # Eventos programados
+        self.spawn_event = Clock.schedule_interval(self.spawn_enemy, 2)
+        self.update_event = Clock.schedule_interval(self.update, 1 / 60)
+        self.score_event = Clock.schedule_interval(self.add_score, 1)
+
+        # Overlays (inicialmente None)
+        self.pause_menu = None
+        self.gameover_menu = None
+
+        # Vincular tecla ESC para pausar
+        Window.bind(on_keyboard=self.on_keyboard)
+
+    def on_keyboard(self, window, key, scancode, codepoint, modifier):
+        """Maneja eventos de teclado"""
+        if key == 27:  # ESC
+            if not self.game_over:
+                self.toggle_pause()
+            return True
+        return False
+
+    def toggle_pause(self):
+        """Alternar pausa del juego"""
+        if self.game_over:
+            return
+
+        self.is_paused = not self.is_paused
+
+        if self.is_paused:
+            # Pausar el juego
+            self.spawn_event.cancel()
+            self.update_event.cancel()
+            self.score_event.cancel()
+            
+            # Mostrar menú de pausa
+            self.pause_menu = PauseMenu(self)
+            self.add_widget(self.pause_menu)
+            
+            # Cambiar icono del botón
+            self.pause_button.text = "▶"
+        else:
+            # Reanudar el juego
+            self.spawn_event = Clock.schedule_interval(self.spawn_enemy, 2)
+            self.update_event = Clock.schedule_interval(self.update, 1 / 60)
+            self.score_event = Clock.schedule_interval(self.add_score, 1)
+            
+            # Ocultar menú de pausa
+            if self.pause_menu:
+                self.remove_widget(self.pause_menu)
+                self.pause_menu = None
+            
+            # Restaurar icono del botón
+            self.pause_button.text = "⏸"
+
+    def show_game_over(self):
+        """Mostrar pantalla de Game Over"""
+        self.game_over = True
+        
+        # Detener todos los eventos
+        self.spawn_event.cancel()
+        self.update_event.cancel()
+        self.score_event.cancel()
+        
+        # Mostrar menú de game over
+        self.gameover_menu = GameOverMenu(self, self.score)
+        self.add_widget(self.gameover_menu)
+        
+        # Ocultar botón de pausa
+        self.pause_button.opacity = 0
+
+    def restart_game(self):
+        """Reiniciar el juego"""
+        # Obtener referencia a la app
+        app = App.get_running_app()
+        app.start_game()
+
+    def go_to_main_menu(self):
+        """Volver al menú principal"""
+        app = App.get_running_app()
+        app.show_main_menu()
 
     def spawn_enemy(self, dt):
-        # Contar cuántos homing existen
+        if self.is_paused or self.game_over:
+            return
+
         homing_count = sum(1 for e in self.enemies if e.is_homing)
 
-        # 30% chance de homing pero máximo 5
         is_homing = False
         if homing_count < 5 and random.random() < 0.3:
             is_homing = True
 
         enemy = Enemy(self.player, is_homing=is_homing)
         
-        # Configurar el método de disparo para este enemigo específico
         def shoot_for_this_enemy():
             self.create_projectile(enemy)
         
         enemy.shoot_projectile = shoot_for_this_enemy
 
-        # Evitar superposición con otros enemigos
         max_attempts = 10
         attempts = 0
         while attempts < max_attempts and any(self.check_enemy_overlap(enemy, other) for other in self.enemies):
@@ -89,38 +170,30 @@ class GameScreen(Widget):
         self.add_widget(enemy)
 
     def create_projectile(self, enemy):
-        """Crear un proyectil desde un enemigo hacia el jugador"""
-        # Debug: verificar que el enemigo existe
         if enemy not in self.enemies:
             return
             
-        # Crear proyectil con las posiciones actuales
         projectile = Projectile(
             start_x=enemy.center_x,
             start_y=enemy.center_y,
             target_x=self.player.center_x,
             target_y=self.player.center_y
         )
-        # Agregar a la lista de proyectiles
         self.projectiles.append(projectile)
-        # IMPORTANTE: Agregar el proyectil al GameScreen, NO al enemy
         self.add_widget(projectile)
-        print(f"Proyectil creado en ({enemy.center_x}, {enemy.center_y})")
 
     def update(self, dt):
-        # --- Mover el fondo ---
-        # Calculamos el límite izquierdo para detener el scroll
+        if self.is_paused or self.game_over:
+            return
+
+        # Mover el fondo
         left_limit = -(self.scaled_bg_width - Window.width)
-        
-        # Nueva posición x
         new_x = self.bg.pos[0] - self.scroll_speed * dt
         
-        # Nos aseguramos de no pasar del límite
         if new_x > left_limit:
             self.bg.pos = (new_x, 0)
-        # ------------------------------------
         
-        # Actualizar enemigos (usar copia de la lista)
+        # Actualizar enemigos
         for enemy in self.enemies[:]:
             alive = enemy.update(dt)
 
@@ -131,10 +204,10 @@ class GameScreen(Widget):
 
             if self.check_collision(self.player, enemy):
                 print("¡Perdiste! Colisión con enemigo")
-                App.get_running_app().stop()
+                self.show_game_over()
                 return
 
-        # Actualizar proyectiles (usar copia de la lista)
+        # Actualizar proyectiles
         for projectile in self.projectiles[:]:
             alive = projectile.update(dt)
             
@@ -143,15 +216,16 @@ class GameScreen(Widget):
                 self.projectiles.remove(projectile)
                 continue
             
-            # Verificar colisión con el jugador
             if self.check_projectile_collision(self.player, projectile):
                 print("¡Perdiste! Colisión con proyectil")
-                App.get_running_app().stop()
+                self.show_game_over()
                 return
 
         self.label.text = self.score_text
 
     def add_score(self, dt):
+        if self.is_paused or self.game_over:
+            return
         self.score += 1
         self.score_text = f"Score: {self.score}"
 
@@ -166,7 +240,6 @@ class GameScreen(Widget):
         return distancia < (pr + er)
 
     def check_projectile_collision(self, player, projectile):
-        """Verificar colisión entre el jugador y un proyectil"""
         px, py = player.center_x, player.center_y
         proj_x, proj_y = projectile.center_x, projectile.center_y
 
@@ -184,7 +257,19 @@ class GameScreen(Widget):
         return distancia < r * 1.5
 
     def on_touch_down(self, touch):
+        if self.is_paused or self.game_over:
+            return super().on_touch_down(touch)
+        
+        # Verificar si tocó el botón de pausa
+        if self.pause_button.collide_point(*touch.pos):
+            return super().on_touch_down(touch)
+        
         self.player.move_to(touch)
+        return super().on_touch_down(touch)
 
     def on_touch_move(self, touch):
+        if self.is_paused or self.game_over:
+            return super().on_touch_move(touch)
+        
         self.player.move_to(touch)
+        return super().on_touch_move(touch)
