@@ -9,6 +9,7 @@ import math, random
 
 from .player import Player
 from .enemy import Enemy
+from .projectile import Projectile
 
 
 class GameScreen(Widget):
@@ -45,6 +46,7 @@ class GameScreen(Widget):
         self.add_widget(self.player)
 
         self.enemies = []
+        self.projectiles = []  # Lista de proyectiles
 
         # Label de puntuación
         self.label = Label(text=self.score_text,
@@ -69,13 +71,41 @@ class GameScreen(Widget):
             is_homing = True
 
         enemy = Enemy(self.player, is_homing=is_homing)
+        
+        # Configurar el método de disparo para este enemigo específico
+        def shoot_for_this_enemy():
+            self.create_projectile(enemy)
+        
+        enemy.shoot_projectile = shoot_for_this_enemy
 
         # Evitar superposición con otros enemigos
-        while any(self.check_enemy_overlap(enemy, other) for other in self.enemies):
+        max_attempts = 10
+        attempts = 0
+        while attempts < max_attempts and any(self.check_enemy_overlap(enemy, other) for other in self.enemies):
             enemy.center_x = random.randint(50, self.width - 50)
+            attempts += 1
 
         self.enemies.append(enemy)
         self.add_widget(enemy)
+
+    def create_projectile(self, enemy):
+        """Crear un proyectil desde un enemigo hacia el jugador"""
+        # Debug: verificar que el enemigo existe
+        if enemy not in self.enemies:
+            return
+            
+        # Crear proyectil con las posiciones actuales
+        projectile = Projectile(
+            start_x=enemy.center_x,
+            start_y=enemy.center_y,
+            target_x=self.player.center_x,
+            target_y=self.player.center_y
+        )
+        # Agregar a la lista de proyectiles
+        self.projectiles.append(projectile)
+        # IMPORTANTE: Agregar el proyectil al GameScreen, NO al enemy
+        self.add_widget(projectile)
+        print(f"Proyectil creado en ({enemy.center_x}, {enemy.center_y})")
 
     def update(self, dt):
         # --- Mover el fondo ---
@@ -90,6 +120,7 @@ class GameScreen(Widget):
             self.bg.pos = (new_x, 0)
         # ------------------------------------
         
+        # Actualizar enemigos (usar copia de la lista)
         for enemy in self.enemies[:]:
             alive = enemy.update(dt)
 
@@ -99,8 +130,24 @@ class GameScreen(Widget):
                 continue
 
             if self.check_collision(self.player, enemy):
-                print("¡Perdiste!")
+                print("¡Perdiste! Colisión con enemigo")
                 App.get_running_app().stop()
+                return
+
+        # Actualizar proyectiles (usar copia de la lista)
+        for projectile in self.projectiles[:]:
+            alive = projectile.update(dt)
+            
+            if not alive:
+                self.remove_widget(projectile)
+                self.projectiles.remove(projectile)
+                continue
+            
+            # Verificar colisión con el jugador
+            if self.check_projectile_collision(self.player, projectile):
+                print("¡Perdiste! Colisión con proyectil")
+                App.get_running_app().stop()
+                return
 
         self.label.text = self.score_text
 
@@ -117,6 +164,17 @@ class GameScreen(Widget):
 
         distancia = math.sqrt((px - ex)**2 + (py - ey)**2)
         return distancia < (pr + er)
+
+    def check_projectile_collision(self, player, projectile):
+        """Verificar colisión entre el jugador y un proyectil"""
+        px, py = player.center_x, player.center_y
+        proj_x, proj_y = projectile.center_x, projectile.center_y
+
+        pr = player.sprite.width / 2 * 0.7
+        proj_r = projectile.sprite.width / 2
+
+        distancia = math.sqrt((px - proj_x)**2 + (py - proj_y)**2)
+        return distancia < (pr + proj_r)
 
     def check_enemy_overlap(self, e1, e2):
         ex1, ey1 = e1.center_x, e1.center_y
