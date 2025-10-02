@@ -2,31 +2,109 @@ from kivy.uix.widget import Widget
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image
-from kivy.graphics import Rectangle, Color
+from kivy.graphics import Rectangle, Color, RoundedRectangle, Ellipse
 from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.animation import Animation
+from kivy.app import App
 import random
 
 
 class MenuButton(Button):
-    """Botón personalizado para el menú"""
+    """Botón personalizado para el menú con efectos mejorados"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.background_color = (0.2, 0.6, 0.9, 0.8)
+        self.background_color = (0, 0, 0, 0)  # Transparente para usar canvas
         self.background_normal = ''
-        self.font_size = '28sp'
+        self.font_size = '24sp'
         self.bold = True
         self.color = (1, 1, 1, 1)
         self.size_hint = (None, None)
-        self.size = (300, 70)
+        self.size = (320, 65)
         
-        # Animación de hover
+        # Dibujar fondo personalizado
+        with self.canvas.before:
+            self.bg_color = Color(0.15, 0.5, 0.85, 0.9)
+            self.bg_rect = RoundedRectangle(
+                pos=self.pos,
+                size=self.size,
+                radius=[15]
+            )
+            # Borde brillante
+            self.border_color = Color(0.3, 0.7, 1, 0.6)
+            self.border_rect = RoundedRectangle(
+                pos=(self.pos[0] - 2, self.pos[1] - 2),
+                size=(self.size[0] + 4, self.size[1] + 4),
+                radius=[15]
+            )
+        
+        self.bind(pos=self.update_rect, size=self.update_rect)
         self.bind(on_press=self.on_button_press)
+        self.bind(on_release=self.on_button_release)
+    
+    def update_rect(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+        self.border_rect.pos = (self.pos[0] - 2, self.pos[1] - 2)
+        self.border_rect.size = (self.size[0] + 4, self.size[1] + 4)
     
     def on_button_press(self, instance):
         """Animación al presionar el botón"""
-        anim = Animation(size=(320, 75), duration=0.1) + Animation(size=(300, 70), duration=0.1)
+        self.bg_color.rgba = (0.1, 0.4, 0.7, 1)
+        anim = Animation(size=(330, 70), duration=0.1)
+        anim.start(self)
+    
+    def on_button_release(self, instance):
+        """Restaurar animación"""
+        self.bg_color.rgba = (0.15, 0.5, 0.85, 0.9)
+        anim = Animation(size=(320, 65), duration=0.1)
+        anim.start(self)
+
+
+class ExitButton(Button):
+    """Botón especial para salir"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_color = (0, 0, 0, 0)
+        self.background_normal = ''
+        self.font_size = '22sp'
+        self.bold = True
+        self.color = (1, 1, 1, 1)
+        self.size_hint = (None, None)
+        self.size = (320, 60)
+        
+        with self.canvas.before:
+            self.bg_color = Color(0.8, 0.2, 0.2, 0.85)
+            self.bg_rect = RoundedRectangle(
+                pos=self.pos,
+                size=self.size,
+                radius=[15]
+            )
+            self.border_color = Color(1, 0.3, 0.3, 0.6)
+            self.border_rect = RoundedRectangle(
+                pos=(self.pos[0] - 2, self.pos[1] - 2),
+                size=(self.size[0] + 4, self.size[1] + 4),
+                radius=[15]
+            )
+        
+        self.bind(pos=self.update_rect, size=self.update_rect)
+        self.bind(on_press=self.on_button_press)
+        self.bind(on_release=self.on_button_release)
+    
+    def update_rect(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+        self.border_rect.pos = (self.pos[0] - 2, self.pos[1] - 2)
+        self.border_rect.size = (self.size[0] + 4, self.size[1] + 4)
+    
+    def on_button_press(self, instance):
+        self.bg_color.rgba = (0.6, 0.15, 0.15, 1)
+        anim = Animation(size=(330, 65), duration=0.1)
+        anim.start(self)
+    
+    def on_button_release(self, instance):
+        self.bg_color.rgba = (0.8, 0.2, 0.2, 0.85)
+        anim = Animation(size=(320, 60), duration=0.1)
         anim.start(self)
 
 
@@ -35,31 +113,54 @@ class MainMenu(Widget):
         super().__init__(**kwargs)
         self.app = app_instance
         
-        # Fondo del menú
+        # Fondo del menú con efecto
         with self.canvas.before:
             self.bg = Rectangle(
                 source="images/fondo1.png",
                 size=(Window.width, Window.height),
                 pos=(0, 0)
             )
-            # Overlay oscuro para mejor legibilidad
-            Color(0, 0, 0, 0.5)
+            # Overlay con gradiente oscuro
+            Color(0, 0, 0, 0.55)
             self.overlay = Rectangle(
                 size=(Window.width, Window.height),
                 pos=(0, 0)
             )
         
-        # Título del juego
+        # Título del juego con sombra
+        self.title_shadow = Label(
+            text="[b]EL VUELO DEL CÓNDOR[/b]",
+            markup=True,
+            font_size='52sp',
+            color=(0, 0, 0, 0.5),
+            size_hint=(None, None),
+            size=(Window.width, 100),
+            pos=(3, Window.height - 177)
+        )
+        self.add_widget(self.title_shadow)
+        
         self.title = Label(
             text="[b]EL VUELO DEL CÓNDOR[/b]",
             markup=True,
-            font_size='72sp',
+            font_size='52sp',
             color=(1, 0.9, 0.2, 1),
             size_hint=(None, None),
             size=(Window.width, 100),
             pos=(0, Window.height - 180)
         )
         self.add_widget(self.title)
+        
+        # Subtítulo
+        self.subtitle = Label(
+            text="[i]Una Aventura en los Andes[/i]",
+            markup=True,
+            font_size='20sp',
+            color=(0.9, 0.9, 0.9, 0.8),
+            size_hint=(None, None),
+            size=(Window.width, 40),
+            pos=(0, Window.height - 220)
+        )
+        self.add_widget(self.subtitle)
         
         # Animación del título
         self.animate_title()
@@ -78,8 +179,8 @@ class MainMenu(Widget):
             sprite = Image(
                 source=self.animation_frames_player[0],
                 size_hint=(None, None),
-                size=(100, 100),
-                pos=(50 + i * (Window.width - 150), Window.height - 300)
+                size=(110, 110),
+                pos=(30 + i * (Window.width - 140), Window.height - 320)
             )
             self.add_widget(sprite)
             self.player_sprites.append(sprite)
@@ -98,8 +199,8 @@ class MainMenu(Widget):
             sprite = Image(
                 source=self.animation_frames_enemy[0],
                 size_hint=(None, None),
-                size=(80, 80),
-                pos=(100 + i * 150, 100)
+                size=(85, 85),
+                pos=(80 + i * 180, 90)
             )
             self.add_widget(sprite)
             self.enemy_sprites.append(sprite)
@@ -107,51 +208,64 @@ class MainMenu(Widget):
         # Iniciar animaciones de sprites
         Clock.schedule_interval(self.animate_sprites, 0.15)
         
-        # Botones del menú
-        button_y = Window.height / 2 + 50
-        button_spacing = 90
+        # Botones del menú con mejor espaciado
+        button_y = Window.height / 2 + 80
+        button_spacing = 80
         
         # Botón Jugar
         self.play_button = MenuButton(text="JUGAR")
-        self.play_button.pos = (Window.width / 2 - 150, button_y)
+        self.play_button.pos = (Window.width / 2 - 160, button_y)
         self.play_button.bind(on_press=self.start_game)
         self.add_widget(self.play_button)
         
         # Botón Nivel
         self.level_button = MenuButton(text="NIVEL")
-        self.level_button.pos = (Window.width / 2 - 150, button_y - button_spacing)
+        self.level_button.pos = (Window.width / 2 - 160, button_y - button_spacing)
         self.level_button.bind(on_press=self.show_levels)
         self.add_widget(self.level_button)
         
         # Botón Instrucciones
         self.instructions_button = MenuButton(text="INSTRUCCIONES")
-        self.instructions_button.pos = (Window.width / 2 - 150, button_y - button_spacing * 2)
+        self.instructions_button.pos = (Window.width / 2 - 160, button_y - button_spacing * 2)
         self.instructions_button.bind(on_press=self.show_instructions)
         self.add_widget(self.instructions_button)
         
         # Botón Opciones
         self.options_button = MenuButton(text="OPCIONES")
-        self.options_button.pos = (Window.width / 2 - 150, button_y - button_spacing * 3)
+        self.options_button.pos = (Window.width / 2 - 160, button_y - button_spacing * 3)
         self.options_button.bind(on_press=self.show_options)
         self.add_widget(self.options_button)
         
-        # Versión del juego
+        # Botón Salir
+        self.exit_button = ExitButton(text="SALIR")
+        self.exit_button.pos = (Window.width / 2 - 160, button_y - button_spacing * 4)
+        self.exit_button.bind(on_press=self.exit_game)
+        self.add_widget(self.exit_button)
+        
+        # Versión del juego mejorada
         self.version_label = Label(
-            text="v1.0",
-            font_size='14sp',
-            color=(1, 1, 1, 0.6),
+            text="[b]Versión 1.0[/b]",
+            markup=True,
+            font_size='16sp',
+            color=(1, 1, 1, 0.7),
             size_hint=(None, None),
-            size=(100, 30),
-            pos=(Window.width - 110, 10)
+            size=(120, 30),
+            pos=(Window.width - 130, 15)
         )
         self.add_widget(self.version_label)
     
     def animate_title(self):
-        """Animación pulsante del título"""
-        anim = (Animation(font_size=76, duration=1) + 
-                Animation(font_size=72, duration=1))
+        """Animación pulsante del título mejorada"""
+        anim = (Animation(font_size=56, duration=1.2) +
+                Animation(font_size=52, duration=1.2))
         anim.repeat = True
         anim.start(self.title)
+        
+        # Animar también la sombra
+        anim_shadow = (Animation(font_size=58, duration=1.2) +
+                       Animation(font_size=54, duration=1.2))
+        anim_shadow.repeat = True
+        anim_shadow.start(self.title_shadow)
     
     def animate_sprites(self, dt):
         """Anima los sprites decorativos"""
@@ -183,6 +297,11 @@ class MainMenu(Widget):
     def show_options(self, instance):
         """Muestra las opciones (por implementar)"""
         print("Opciones - Próximamente...")
+    
+    def exit_game(self, instance):
+        """Cierra la aplicación"""
+        print("Saliendo del juego...")
+        App.get_running_app().stop()
 
 
 class LevelScreen(Widget):
@@ -198,7 +317,7 @@ class LevelScreen(Widget):
                 size=(Window.width, Window.height),
                 pos=(0, 0)
             )
-            Color(0, 0, 0, 0.6)
+            Color(0, 0, 0, 0.65)
             self.overlay = Rectangle(
                 size=(Window.width, Window.height),
                 pos=(0, 0)
@@ -218,14 +337,13 @@ class LevelScreen(Widget):
         
         # Botón Nivel 1
         self.level1_button = MenuButton(text="NIVEL 1")
-        self.level1_button.pos = (Window.width / 2 - 150, Window.height / 2)
+        self.level1_button.pos = (Window.width / 2 - 160, Window.height / 2)
         self.level1_button.bind(on_press=self.start_level1)
         self.add_widget(self.level1_button)
         
         # Botón Volver
-        self.back_button = MenuButton(text="VOLVER")
-        self.back_button.pos = (Window.width / 2 - 150, 100)
-        self.back_button.background_color = (0.6, 0.2, 0.2, 0.8)
+        self.back_button = ExitButton(text="VOLVER")
+        self.back_button.pos = (Window.width / 2 - 160, 120)
         self.back_button.bind(on_press=self.go_back)
         self.add_widget(self.back_button)
     
@@ -252,7 +370,7 @@ class InstructionsScreen(Widget):
                 size=(Window.width, Window.height),
                 pos=(0, 0)
             )
-            Color(0, 0, 0, 0.7)
+            Color(0, 0, 0, 0.75)
             self.overlay = Rectangle(
                 size=(Window.width, Window.height),
                 pos=(0, 0)
@@ -270,27 +388,27 @@ class InstructionsScreen(Widget):
         )
         self.add_widget(self.title)
         
-        # Texto de instrucciones
+        # Texto de instrucciones mejorado
         instructions_text = """
-[b]CÓMO JUGAR:[/b]
+[b][size=26]COMO JUGAR:[/size][/b]
 
-• Toca o arrastra en la pantalla para mover tu ave
+Toca o arrastra en la pantalla para mover tu ave
 
-• Evita colisionar con los enemigos
+Evita colisionar con los enemigos
 
-• Esquiva los proyectiles enemigos
+Esquiva los proyectiles enemigos
 
-• Algunos enemigos te siguen
+Algunos enemigos te siguen
 
-• Sobrevive el mayor tiempo posible
+Sobrevive el mayor tiempo posible
 
-[b]¡Buena suerte, piloto![/b]
-        """
+[b][color=20ff20]Buena suerte, piloto![/color][/b]
+"""
         
         self.instructions_label = Label(
             text=instructions_text,
             markup=True,
-            font_size='22sp',
+            font_size='24sp',
             color=(1, 1, 1, 1),
             size_hint=(None, None),
             size=(Window.width - 100, Window.height - 300),
@@ -302,9 +420,8 @@ class InstructionsScreen(Widget):
         self.add_widget(self.instructions_label)
         
         # Botón Volver
-        self.back_button = MenuButton(text="VOLVER")
-        self.back_button.pos = (Window.width / 2 - 150, 50)
-        self.back_button.background_color = (0.6, 0.2, 0.2, 0.8)
+        self.back_button = ExitButton(text="VOLVER")
+        self.back_button.pos = (Window.width / 2 - 160, 120)
         self.back_button.bind(on_press=self.go_back)
         self.add_widget(self.back_button)
     
