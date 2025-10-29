@@ -350,7 +350,7 @@ class LevelScreen(Widget):
     def start_level1(self, instance):
         """Inicia el nivel 1"""
         print("Iniciando Nivel 1...")
-        self.app.start_game()
+        self.app.start_trajectory_game()
     
     def go_back(self, instance):
         """Vuelve al menú principal"""

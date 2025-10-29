@@ -1,3 +1,4 @@
+# main.py
 from kivy.config import Config
 
 Config.set('graphics', 'width', '540')
@@ -9,6 +10,10 @@ from game.screen import GameScreen
 from game.menu import MainMenu, LevelScreen, InstructionsScreen
 from kivy.core.audio import SoundLoader
 
+# --- NUEVA IMPORTACIÓN ---
+from game.trajectory_screen import TrajectoryGameScreen
+# -------------------------
+
 class RootWidget(Widget):
     """Widget raíz que contiene todas las pantallas"""
     pass
@@ -18,18 +23,15 @@ class MyGameApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.root_widget = None
-            # --- 2. CARGAR Y CONFIGURAR LA MÚSICA ---
         self.music = SoundLoader.load('images/musica.mp3')
         if self.music:
-            self.music.loop = True
-            self.music.volume = 0.5 # Opcional: ajusta el volumen (0.0 a 1.0)
+            self.music.loop = True 
+            self.music.volume = 0.5 
+            
     def build(self):
-        # Crear el widget raíz
         self.root_widget = RootWidget()
-                # --- 3. REPRODUCIR LA MÚSICA --- 
         if self.music:
             self.music.play()
-        # Mostrar el menú principal al iniciar
         self.show_main_menu()
         return self.root_widget
     
@@ -52,10 +54,18 @@ class MyGameApp(App):
         self.root_widget.add_widget(instructions)
     
     def start_game(self):
-        """Inicia el juego"""
+        """Inicia el juego (MODO NAVE)"""
         self.root_widget.clear_widgets()
         game = GameScreen()
         self.root_widget.add_widget(game)
+        
+    # --- MÉTODO NUEVO ---
+    def start_trajectory_game(self):
+        """Inicia el juego (MODO TRAYECTORIA)"""
+        self.root_widget.clear_widgets()
+        game = TrajectoryGameScreen()
+        self.root_widget.add_widget(game)
+    # --------------------
 
 
 if __name__ == "__main__":
