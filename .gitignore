@@ -214,3 +214,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Bytecode y cachés de Python (seguro)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
