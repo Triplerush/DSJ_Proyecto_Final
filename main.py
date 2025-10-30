@@ -9,7 +9,6 @@ from kivy.uix.widget import Widget
 from game.screen import GameScreen
 from game.menu import MainMenu, LevelScreen, InstructionsScreen
 from kivy.core.audio import SoundLoader
-
 # --- NUEVA IMPORTACIÓN ---
 from game.trajectory_screen import TrajectoryGameScreen
 # -------------------------
@@ -53,19 +52,34 @@ class MyGameApp(App):
         instructions = InstructionsScreen(app_instance=self)
         self.root_widget.add_widget(instructions)
     
+    def _set_screen(self, widget: Widget):
+        self.root_widget.clear_widgets()
+        self.root_widget.add_widget(widget)
+
+    # Nivel 1 (modo nave)
+    def start_level1(self):
+        game = GameScreen()
+        self._set_screen(game)
+
     def start_game(self):
         """Inicia el juego (MODO NAVE)"""
-        self.root_widget.clear_widgets()
-        game = GameScreen()
-        self.root_widget.add_widget(game)
+        self.start_level1()
         
-    # --- MÉTODO NUEVO ---
-    def start_trajectory_game(self):
-        """Inicia el juego (MODO TRAYECTORIA)"""
-        self.root_widget.clear_widgets()
-        game = TrajectoryGameScreen()
-        self.root_widget.add_widget(game)
-    # --------------------
+    # Nivel 2 (trayectoria) con selección de dificultad
+    def start_level2(self, difficulty: str = "normal"):
+        if TrajectoryGameScreen is None:
+            print("Nivel 2 no disponible: trajectory_screen.py no importable.")
+            return
+        # Intentar pasar dificultad al constructor; fallback si no la acepta
+        try:
+            game = TrajectoryGameScreen(difficulty=difficulty)
+        except TypeError:
+            game = TrajectoryGameScreen()
+            if hasattr(game, "set_difficulty"):
+                game.set_difficulty(difficulty)
+        self._set_screen(game)
+
+    
 
 
 if __name__ == "__main__":

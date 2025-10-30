@@ -7,6 +7,10 @@ from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout           # <-- FALTABAN ESTOS IMPORTS
+from kivy.uix.popup import Popup 
+from kivy.uix.gridlayout import GridLayout  # NUEVO
+
 import random
 
 
@@ -215,26 +219,14 @@ class MainMenu(Widget):
         # Botón Jugar
         self.play_button = MenuButton(text="JUGAR")
         self.play_button.pos = (Window.width / 2 - 160, button_y)
-        self.play_button.bind(on_press=self.start_game)
+        self.play_button.bind(on_press=lambda *_: self.open_level_select())
         self.add_widget(self.play_button)
-        
-        # Botón Nivel
-        self.level_button = MenuButton(text="NIVEL")
-        self.level_button.pos = (Window.width / 2 - 160, button_y - button_spacing)
-        self.level_button.bind(on_press=self.show_levels)
-        self.add_widget(self.level_button)
         
         # Botón Instrucciones
         self.instructions_button = MenuButton(text="INSTRUCCIONES")
         self.instructions_button.pos = (Window.width / 2 - 160, button_y - button_spacing * 2)
         self.instructions_button.bind(on_press=self.show_instructions)
         self.add_widget(self.instructions_button)
-        
-        # Botón Opciones
-        self.options_button = MenuButton(text="OPCIONES")
-        self.options_button.pos = (Window.width / 2 - 160, button_y - button_spacing * 3)
-        self.options_button.bind(on_press=self.show_options)
-        self.add_widget(self.options_button)
         
         # Botón Salir
         self.exit_button = ExitButton(text="SALIR")
@@ -303,6 +295,66 @@ class MainMenu(Widget):
         print("Saliendo del juego...")
         App.get_running_app().stop()
 
+    def open_level_select(self):
+        content = BoxLayout(orientation='vertical', spacing=12, padding=(20,20,20,20))
+        lbl = Label(text="[b]Selecciona Nivel[/b]", markup=True, size_hint=(1, None), height=42)
+        content.add_widget(lbl)
+
+        grid = GridLayout(cols=1, spacing=10, size_hint=(1, None))
+        grid.bind(minimum_height=grid.setter('height'))
+        btn_n1 = MenuButton(text="NIVEL 1", size_hint=(1, None), height=56)
+        btn_n2 = MenuButton(text="NIVEL 2", size_hint=(1, None), height=56)
+        grid.add_widget(btn_n1)
+        grid.add_widget(btn_n2)
+        content.add_widget(grid)
+
+        btn_cancel = ExitButton(text="CANCELAR", size_hint=(1, None), height=52)
+        content.add_widget(btn_cancel)
+
+        popup = Popup(title="Seleccionar Nivel", content=content,
+                      size_hint=(None, None), size=(410, 270), auto_dismiss=True)
+        popup.separator_color = (0, 0, 0, 0)
+        btn_n1.bind(on_press=lambda *_: (popup.dismiss(), self.start_level1()))
+        btn_n2.bind(on_press=lambda *_: (popup.dismiss(), self.open_difficulty_select()))
+        btn_cancel.bind(on_press=lambda *_: popup.dismiss())
+        popup.open()
+
+    def start_level1(self):
+        if self.app and hasattr(self.app, "start_level1"):
+            self.app.start_level1()
+    
+    def open_difficulty_select(self):
+        content = BoxLayout(orientation='vertical', spacing=12, padding=(20,20,20,20))
+        lbl = Label(text="[b]Nivel 2 - Selecciona Dificultad[/b]\nFácil, Normal o Difícil",
+                    markup=True, size_hint=(1, None), height=68)
+        content.add_widget(lbl)
+
+        grid = GridLayout(cols=1, spacing=10, size_hint=(1, None))
+        grid.bind(minimum_height=grid.setter('height'))
+
+        btn_easy = MenuButton(text="FÁCIL", size_hint=(1, None), height=56)
+        btn_normal = MenuButton(text="NORMAL", size_hint=(1, None), height=56)
+        btn_hard = MenuButton(text="DIFÍCIL", size_hint=(1, None), height=56)
+        grid.add_widget(btn_easy)
+        grid.add_widget(btn_normal)
+        grid.add_widget(btn_hard)
+        content.add_widget(grid)
+
+        btn_cancel = ExitButton(text="CANCELAR", size_hint=(1, None), height=52)
+        content.add_widget(btn_cancel)
+
+        popup = Popup(title="Nivel 2 - Dificultad", content=content,
+                      size_hint=(None, None), size=(410, 350), auto_dismiss=True)
+        popup.separator_color = (0, 0, 0, 0)
+        btn_easy.bind(on_press=lambda *_: (popup.dismiss(), self.start_level2("easy")))
+        btn_normal.bind(on_press=lambda *_: (popup.dismiss(), self.start_level2("normal")))
+        btn_hard.bind(on_press=lambda *_: (popup.dismiss(), self.start_level2("hard")))
+        btn_cancel.bind(on_press=lambda *_: popup.dismiss())
+        popup.open()
+
+    def start_level2(self, difficulty: str):
+        if self.app and hasattr(self.app, "start_level2"):
+            self.app.start_level2(difficulty)
 
 class LevelScreen(Widget):
     """Pantalla de selección de niveles"""
@@ -350,7 +402,7 @@ class LevelScreen(Widget):
     def start_level1(self, instance):
         """Inicia el nivel 1"""
         print("Iniciando Nivel 1...")
-        self.app.start_trajectory_game()
+        self.app.start_level1()
     
     def go_back(self, instance):
         """Vuelve al menú principal"""
