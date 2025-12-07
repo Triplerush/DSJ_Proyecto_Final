@@ -219,3 +219,6 @@ __marimo__/
 **/__pycache__/
 **/*.pyc
 **/*.pyo
+
+.buildozer/
+bin/
