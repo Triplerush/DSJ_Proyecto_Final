@@ -304,18 +304,21 @@ class MainMenu(Widget):
         grid.bind(minimum_height=grid.setter('height'))
         btn_n1 = MenuButton(text="NIVEL 1", size_hint=(1, None), height=56)
         btn_n2 = MenuButton(text="NIVEL 2", size_hint=(1, None), height=56)
+        btn_n3 = MenuButton(text="NIVEL 3 (Cámara AR)", size_hint=(1, None), height=56)
         grid.add_widget(btn_n1)
         grid.add_widget(btn_n2)
+        grid.add_widget(btn_n3)
         content.add_widget(grid)
 
         btn_cancel = ExitButton(text="CANCELAR", size_hint=(1, None), height=52)
         content.add_widget(btn_cancel)
 
         popup = Popup(title="Seleccionar Nivel", content=content,
-                      size_hint=(None, None), size=(410, 270), auto_dismiss=True)
+                      size_hint=(None, None), size=(410, 360), auto_dismiss=True)
         popup.separator_color = (0, 0, 0, 0)
         btn_n1.bind(on_press=lambda *_: (popup.dismiss(), self.start_level1()))
         btn_n2.bind(on_press=lambda *_: (popup.dismiss(), self.open_difficulty_select()))
+        btn_n3.bind(on_press=lambda *_: (popup.dismiss(), self.start_level3()))
         btn_cancel.bind(on_press=lambda *_: popup.dismiss())
         popup.open()
 
@@ -355,6 +358,10 @@ class MainMenu(Widget):
     def start_level2(self, difficulty: str):
         if self.app and hasattr(self.app, "start_level2"):
             self.app.start_level2(difficulty)
+            
+    def start_level3(self):
+        if self.app and hasattr(self.app, "start_level3"):
+            self.app.start_level3()
 
 class LevelScreen(Widget):
     """Pantalla de selección de niveles"""

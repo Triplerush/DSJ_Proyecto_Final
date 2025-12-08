@@ -34,7 +34,7 @@ version = 1.0
 
 # (list) Application requirements
 # IMPORTANTE: Solo python3 y kivy. No necesitas math/random aqui.
-requirements = python3,kivy==2.3.0,Cython==0.29.36
+requirements = python3,kivy==2.3.0,Cython>=3.0.0,pillow,plyer
 
 # (str) Presplash of the application
 #presplash.filename = %(source.dir)s/data/presplash.png
@@ -64,7 +64,7 @@ fullscreen = 1
 
 # (list) Permissions
 # WAKE_LOCK mantiene la pantalla encendida mientras juegan
-android.permissions = WAKE_LOCK
+android.permissions = WAKE_LOCK, CAMERA
 
 # (int) Target Android API, should be as high as possible.
 android.api = 34
