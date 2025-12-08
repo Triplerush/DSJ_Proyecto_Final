@@ -48,6 +48,7 @@ class TrajectoryGameScreen(Widget):
         
         
         with self.canvas.before:
+            self.bg_color = Color(1, 1, 1, 1) # Para poder cambiar opacidad
             self.bg = Rectangle(
                 source="images/fondo2.png",
                 size=(Window.width, Window.height),

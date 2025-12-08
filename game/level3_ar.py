@@ -1,151 +1,206 @@
+import cv2
+import numpy as np
+import math
 from kivy.uix.widget import Widget
-from kivy.uix.camera import Camera
-from kivy.core.window import Window
+from kivy.uix.image import Image
 from kivy.clock import Clock
-from kivy.graphics import Color, Rectangle
-from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Rotate
-from kivy.utils import platform
+from kivy.graphics.texture import Texture
+from kivy.core.window import Window
+from kivy.uix.scatter import Scatter
 from kivy.uix.label import Label
-import random
+from kivy.graphics import Color
 
-# Importamos la lógica base
+# Importamos el nivel base
 from game.trajectory_screen import TrajectoryGameScreen
-from game.enemy_patrol import PatrolEnemy
-from game.level1 import Waypoint
 
-try:
-    from plyer import accelerometer
-except ImportError:
-    accelerometer = None
-
-class ARGameScreen(TrajectoryGameScreen):
-    
+class ARGameScreen(Widget):
     def __init__(self, **kwargs):
-        # 1. Inicializamos la pantalla base (Nivel 2)
-        super().__init__(difficulty="hard", **kwargs)
+        super().__init__(**kwargs)
         
-        # 2. BORRADO DE FONDO DEL NIVEL 2
-        # Eliminamos la imagen de fondo para que no estorbe
-        if hasattr(self, 'bg'):
-            self.canvas.before.remove(self.bg)
-            del self.bg
-
-        # Agregamos un fondo NEGRO por seguridad (para que no se vea "fantasma")
-        with self.canvas.before:
-            Color(0, 0, 0, 1)
-            self.bg_black = Rectangle(size=Window.size, pos=(0,0))
-
-        # 3. CONFIGURACIÓN DE CÁMARA ROBUSTA
-        # Usamos resolución estándar
-        self.camera = Camera(play=True, resolution=(640, 480))
-        self.camera.allow_stretch = True
-        self.camera.keep_ratio = False
+        # 1. Configuración de Cámara con OpenCV
+        # Si usas DroidCam, prueba con indices 0, 1 o 2 si no abre a la primera.
+        self.capture = cv2.VideoCapture(0) 
         
-        # --- TRUCO DE ROTACIÓN ---
-        # 1. Le damos tamaño INVERTIDO: Ancho = Alto de Pantalla, Alto = Ancho de Pantalla.
-        #    Esto crea un rectángulo "acostado" que cubre toda el área.
-        self.camera.size_hint = (None, None)
-        self.camera.size = (Window.height, Window.width)
+        # Ajustamos a resolución HD estándar
+        self.cam_w = 1280.0
+        self.cam_h = 720.0
+        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.cam_w)
+        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cam_h)
+
+        # 2. Configuración de ArUco
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+        self.aruco_params = cv2.aruco.DetectorParameters()
+        self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+
+        # 3. Matriz de Cámara Aproximada (para cálculos 3D)
+        focal_length = self.cam_w
+        center = (self.cam_w / 2, self.cam_h / 2)
+        self.camera_matrix = np.array(
+            [[focal_length, 0, center[0]],
+             [0, focal_length, center[1]],
+             [0, 0, 1]], dtype="double"
+        )
+        self.dist_coeffs = np.zeros((4, 1))
+
+        # 4. Widget de Imagen para el fondo (Video en vivo)
+        self.camera_image = Image(size=Window.size, allow_stretch=True, keep_ratio=False)
+        self.add_widget(self.camera_image)
+
+        # 5. Contenedor "Scatter" para el Mundo del Juego
+        # Bloqueamos interacción manual para controlarlo por código
+        self.game_container = Scatter(do_rotation=False, do_scale=False, do_translation=False)
         
-        # 2. La centramos perfectamente en la pantalla
-        self.camera.center = Window.center
+        # Dimensiones de diseño original
+        self.design_width = 540
+        self.design_height = 960
+        self.game_container.size_hint = (None, None)
+        self.game_container.size = (self.design_width, self.design_height)
+        self.game_container.center = Window.center
+        self.add_widget(self.game_container)
 
-        # 3. La rotamos -90 grados sobre SU PROPIO CENTRO.
-        #    Al girar un rectángulo "acostado", se vuelve "parado" y llena la pantalla.
-        with self.camera.canvas.before:
-            PushMatrix()
-            Rotate(angle=-90, origin=self.camera.center)
-        with self.camera.canvas.after:
-            PopMatrix()
+        # ---------------------------------------------------------
+        # 6. INSTANCIACIÓN Y PARCHE DEL NIVEL
+        # ---------------------------------------------------------
+        self.game_level = TrajectoryGameScreen(difficulty="hard")
         
-        # Insertamos la cámara al fondo de la lista de widgets (index alto = dibujado al fondo)
-        self.add_widget(self.camera, index=len(self.children)) 
+        # A) Borrar fondo del nivel para que sea transparente
+        if hasattr(self.game_level, 'bg'):
+             self.game_level.canvas.before.remove(self.game_level.bg)
+             if hasattr(self.game_level, 'bg_color'):
+                 self.game_level.bg_color.a = 0
+        
+        # B) Sobrescribir el botón "Reintentar" para que recargue AR y no el Nivel 2 normal
+        def custom_restart_ar():
+            from kivy.app import App
+            app = App.get_running_app()
+            # Forzamos la recarga del Nivel 3 (AR)
+            if hasattr(app, 'start_level3'):
+                app.start_level3()
+            else:
+                print("Error: start_level3 no encontrado en App")
 
-        # 4. Variables de "Mundo Virtual" (Acelerómetro)
-        self.camera_offset_x = 0.0
-        self.world_width = 2000
-        self.sensor_speed = 15.0
+        # Reemplazamos el método de la instancia
+        self.game_level.restart_level = custom_restart_ar
+        
+        # Añadir al contenedor
+        self.game_level.size = self.game_container.size
+        self.game_container.add_widget(self.game_level)
+        # ---------------------------------------------------------
 
-        # Activar sensores
-        if platform == 'android':
-            try:
-                accelerometer.enable()
-            except:
-                print("Error iniciando acelerómetro")
-
-        # Texto de ayuda
+        # 7. UI Informativa
         self.info_label = Label(
-            text="[b]Mueve tu celular a los lados\npara encontrar a los enemigos[/b]",
-            markup=True, font_size='20sp',
-            halign='center', pos_hint={'center_x': 0.5, 'top': 0.9}
+            text="[b]APUNTA AL MARCADOR ARUCO (ID 0)[/b]\nEl juego se levantará perpendicularmente",
+            markup=True, font_size='24sp', color=(1, 1, 0, 1),
+            pos_hint={'center_x': 0.5, 'top': 0.9}
         )
         self.add_widget(self.info_label)
 
-        # Crear enemigos
-        self.reset_ar_enemies()
+        # 8. Bucle de actualización (30 FPS)
+        Clock.schedule_interval(self.update_frame, 1.0 / 30.0)
 
-    def reset_ar_enemies(self):
-        """Borra los enemigos normales y crea enemigos 'flotantes'"""
-        for e in self.enemies:
-            self.remove_widget(e)
-        self.enemies.clear()
+    def update_frame(self, dt):
+        ret, frame = self.capture.read()
+        if not ret:
+            return
 
-        # Crear enemigos en un área amplia
-        for i in range(8):
-            world_x = random.randint(-800, 800)
-            world_y = random.randint(300, int(Window.height - 150))
-            
-            dummy_wp = Waypoint("static", (world_x, world_y))
-            enemy = PatrolEnemy([dummy_wp], speed=0)
-            
-            # Guardar posición virtual
-            enemy.world_x = world_x 
-            enemy.world_y = world_y
-            
-            self.enemies.append(enemy)
-            self.add_widget(enemy)
-
-    def update(self, dt):
-        # 1. Leer sensores
-        self.update_camera_offset()
-
-        # 2. Actualizar posición visual de enemigos (Efecto AR)
-        center_screen_x = Window.width / 2
-        for enemy in self.enemies:
-            if not getattr(enemy, 'is_dead', False):
-                # Posición pantalla = Centro + (PosMundo - OffsetCámara)
-                screen_x = center_screen_x + (enemy.world_x - self.camera_offset_x)
-                enemy.center_x = screen_x
-                enemy.center_y = enemy.world_y
-                enemy.update_sprite()
-
-        # 3. Física y lógica normal
-        super().update(dt)
-
-        # Ajuste extra: Asegurar que el fondo negro cubra todo si la ventana cambia
-        if hasattr(self, 'bg_black'):
-            self.bg_black.size = Window.size
-
-    def update_camera_offset(self):
-        if platform == 'android' and accelerometer:
-            try:
-                val = accelerometer.acceleration[:3]
-                if val:
-                    accel_x = val[0]
-                    if abs(accel_x) > 1.0: 
-                        self.camera_offset_x += accel_x * self.sensor_speed
-            except:
-                pass
+        # Detección de marcadores
+        corners, ids, rejected = self.detector.detectMarkers(frame)
         
-        # Limites del mundo
-        limit = 1000
-        if self.camera_offset_x > limit: self.camera_offset_x = limit
-        if self.camera_offset_x < -limit: self.camera_offset_x = -limit
+        detected = False
+        if ids is not None:
+            for i, marker_id in enumerate(ids):
+                # Prioridad al ID 0 o cualquiera disponible
+                if marker_id == 0 or len(ids) > 0: 
+                    detected = True
+                    self.process_marker_3d(corners[i][0], frame)
+                    self.info_label.opacity = 0
+                    self.game_container.opacity = 1
+                    break
+        
+        if not detected:
+            self.info_label.opacity = 1
+            # Opcional: Ocultar juego si se pierde tracking
+            # self.game_container.opacity = 0.5
+
+        # Renderizar frame en Kivy (Voltear verticalmente y crear textura)
+        buf = cv2.flip(frame, 0).tobytes()
+        tex = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
+        tex.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+        self.camera_image.texture = tex
+        
+        # Actualizar lógica del juego
+        self.game_level.update(dt)
+
+    def process_marker_3d(self, corners_2d, frame):
+        """Calcula posición, rotación y escala perpendicular al marcador"""
+        
+        # 1. Definir marcador en 3D
+        marker_size = 1.0
+        obj_points = np.array([
+            [-marker_size/2, marker_size/2, 0], # Top-Left
+            [marker_size/2, marker_size/2, 0],  # Top-Right
+            [marker_size/2, -marker_size/2, 0], # Bottom-Right
+            [-marker_size/2, -marker_size/2, 0] # Bottom-Left
+        ], dtype=np.float32)
+
+        corners_2d = np.array(corners_2d, dtype=np.float32)
+
+        # 2. Resolver PnP
+        success, rvec, tvec = cv2.solvePnP(obj_points, corners_2d, self.camera_matrix, self.dist_coeffs)
+        
+        if not success: return
+
+        # FIX CRÍTICO OPCENCV: Forzar formato (3,1) float64
+        rvec = np.array(rvec, dtype=np.float64).reshape((3, 1))
+        tvec = np.array(tvec, dtype=np.float64).reshape((3, 1))
+
+        # 3. Puntos a proyectar (Base y Cima)
+        height_scale_factor = 3.0 # Altura virtual del juego
+        axis_points_3d = np.array([
+            [0, 0, 0],                      
+            [0, 0, marker_size * height_scale_factor] 
+        ], dtype=np.float32)
+
+        # 4. Proyectar
+        try:
+            img_points, _ = cv2.projectPoints(axis_points_3d, rvec, tvec, self.camera_matrix, self.dist_coeffs)
+        except cv2.error as e:
+            print(f"Error projecting points: {e}")
+            return
+        
+        p_base = img_points[0][0]
+        p_top = img_points[1][0]
+
+        # 5. Mapeo a Pantalla Kivy
+        screen_w, screen_h = Window.size
+        scale_x = screen_w / self.cam_w
+        scale_y = screen_h / self.cam_h
+
+        # Invertir Y (OpenCV vs Kivy)
+        base_x = p_base[0] * scale_x
+        base_y = (self.cam_h - p_base[1]) * scale_y
+        
+        top_x = p_top[0] * scale_x
+        top_y = (self.cam_h - p_top[1]) * scale_y
+
+        # A. Posición (Centro)
+        center_x = (base_x + top_x) / 2
+        center_y = (base_y + top_y) / 2
+        self.game_container.center = (center_x, center_y)
+
+        # B. Rotación (Perpendicular)
+        dx = top_x - base_x
+        dy = top_y - base_y
+        angle_rad = math.atan2(dy, dx)
+        angle_deg = math.degrees(angle_rad)
+        self.game_container.rotation = angle_deg - 90
+
+        # C. Escala
+        dist_px = math.hypot(dx, dy)
+        if self.design_height > 0:
+            scale = dist_px / self.design_height
+            self.game_container.scale = scale
 
     def on_stop(self):
-        if platform == 'android':
-            try:
-                accelerometer.disable()
-            except:
-                pass
-        super().on_stop()
+        if self.capture:
+            self.capture.release()
